@@ -391,7 +391,7 @@ def multipart_matcher(
 
 
 def header_matcher(
-    headers: Dict[str, str], strict_match: bool = False
+    headers: Dict[str, Union[str, re.Pattern[str]]], strict_match: bool = False
 ) -> Callable[..., Any]:
     """
     Matcher to match 'headers' argument in request using the responses library.

@@ -10,7 +10,7 @@ import responses
 
 
 @pytest.mark.parametrize("execution_number", range(10))
-def test_multithreading_lock(execution_number):
+def test_multithreading_lock(execution_number: int) -> None:
     """Reruns test multiple times since error is random and
     depends on CPU and can lead to false positive result.
 
@@ -22,7 +22,7 @@ def test_multithreading_lock(execution_number):
             for i in range(n_requests):
                 m.add(url=f"http://example.com/example{i}", method="GET")
 
-        def fun():
+        def fun() -> None:
             for req in range(n_requests):
                 requests.get(f"http://example.com/example{req}")
 

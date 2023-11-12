@@ -5,14 +5,21 @@ import warnings
 from io import BufferedReader
 from io import BytesIO
 from typing import Any
+from typing import Dict
 from typing import List
+from typing import Mapping
 from typing import Optional
+from typing import Pattern
+from typing import Tuple
+from typing import Type
+from typing import Union
 from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
 import requests
 import urllib3
+from pytest_httpserver import HTTPServer
 from requests.exceptions import ChunkedEncodingError
 from requests.exceptions import ConnectionError
 from requests.exceptions import HTTPError
@@ -29,13 +36,15 @@ from responses import matchers
 from responses import registries
 
 
-def assert_reset():
+def assert_reset() -> None:
     assert len(responses.mock.registered()) == 0
     assert len(responses.calls) == 0
 
 
 def assert_response(
-    resp: Any, body: Optional[Any] = None, content_type: "Optional[str]" = "text/plain"
+    resp: requests.Response,
+    body: Optional[Any] = None,
+    content_type: Optional[str] = "text/plain",
 ) -> None:
     assert resp.status_code == 200
     assert resp.reason == "OK"
@@ -46,7 +55,7 @@ def assert_response(
     assert resp.text == body
 
 
-def assert_params(resp, expected):
+def assert_params(resp: requests.Response, expected: Dict[str, str]) -> None:
     assert hasattr(resp, "request"), "Missing request"
     assert hasattr(
         resp.request, "params"
@@ -54,29 +63,34 @@ def assert_params(resp, expected):
     assert getattr(resp.request, "params") == expected, "Incorrect parameters"
 
 
-def test_response():
+def test_response() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://example.com", body=b"test")
         resp = requests.get("http://example.com")
         assert_response(resp, "test")
-        assert len(responses.calls) == 1
-        assert responses.calls[0].request.url == "http://example.com/"
-        assert responses.calls[0].response.content == b"test"
+
+        resp = responses.calls[0].response
+        assert isinstance(resp, requests.Response)
+        assert resp.request.url == "http://example.com/"
+        assert resp.content == b"test"
 
         resp = requests.get("http://example.com?foo=bar")
         assert_response(resp, "test")
         assert len(responses.calls) == 2
-        assert responses.calls[1].request.url == "http://example.com/?foo=bar"
-        assert responses.calls[1].response.content == b"test"
+
+        resp = responses.calls[1].response
+        assert isinstance(resp, requests.Response)
+        assert resp.request.url == "http://example.com/?foo=bar"
+        assert resp.content == b"test"
 
     run()
     assert_reset()
 
 
-def test_response_encoded():
+def test_response_encoded() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         # Path contains urlencoded =/()[]
         url = "http://example.org/foo.bar%3D%2F%28%29%5B%5D"
         responses.add(responses.GET, url, body="it works", status=200)
@@ -87,9 +101,9 @@ def test_response_encoded():
     assert_reset()
 
 
-def test_response_with_instance():
+def test_response_with_instance() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(
             responses.Response(method=responses.GET, url="http://example.com")
         )
@@ -123,9 +137,12 @@ def test_response_with_instance():
         ),
     ],
 )
-def test_replace(original, replacement):
+def test_replace(
+    original: Union[str, requests.Response, Pattern[str]],
+    replacement: Union[str, requests.Response, Pattern[str]],
+) -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://example.com/one", body="test1")
 
         if isinstance(original, BaseResponse):
@@ -157,9 +174,11 @@ def test_replace(original, replacement):
         (re.compile(r"http://example\.com/one"), "http://example.com/one"),
     ],
 )
-def test_replace_error(original, replacement):
+def test_replace_error(
+    original: Union[str, Pattern[str]], replacement: Union[str, Pattern[str]]
+) -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, original)
         with pytest.raises(ValueError) as excinfo:
             responses.replace(responses.GET, replacement)
@@ -171,9 +190,9 @@ def test_replace_error(original, replacement):
     assert_reset()
 
 
-def test_replace_response_object_error():
+def test_replace_response_object_error() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(Response(method=responses.GET, url="http://example.com/one"))
         with pytest.raises(ValueError) as excinfo:
             responses.replace(
@@ -203,9 +222,12 @@ def test_replace_response_object_error():
         ),
     ],
 )
-def test_upsert_replace(original, replacement):
+def test_upsert_replace(
+    original: Union[str, requests.Response, Pattern[str]],
+    replacement: Union[str, requests.Response, Pattern[str]],
+) -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://example.com/one", body="test1")
 
         if isinstance(original, BaseResponse):
@@ -241,9 +263,12 @@ def test_upsert_replace(original, replacement):
         ),
     ],
 )
-def test_upsert_add(original, replacement):
+def test_upsert_add(
+    original: Union[str, requests.Response, Pattern[str]],
+    replacement: Union[str, requests.Response, Pattern[str]],
+) -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://example.com/one", body="test1")
 
         if isinstance(replacement, BaseResponse):
@@ -258,9 +283,9 @@ def test_upsert_add(original, replacement):
     assert_reset()
 
 
-def test_remove():
+def test_remove() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://example.com/zero")
         responses.add(responses.GET, "http://example.com/one")
         responses.add(responses.GET, "http://example.com/two")
@@ -299,23 +324,25 @@ def test_remove():
         ),
     ],
 )
-def test_response_equality(args1, kwargs1, args2, kwargs2, expected):
+def test_response_equality(
+    args1: Tuple, kwargs1: Dict, args2: Tuple, kwargs2: Dict, expected: bool
+) -> None:
     o1 = BaseResponse(*args1, **kwargs1)
     o2 = BaseResponse(*args2, **kwargs2)
     assert (o1 == o2) is expected
     assert (o1 != o2) is not expected
 
 
-def test_response_equality_different_objects():
+def test_response_equality_different_objects() -> None:
     o1 = BaseResponse(method=responses.GET, url="a")
     o2 = "str"
     assert (o1 == o2) is False
     assert (o1 != o2) is True
 
 
-def test_connection_error():
+def test_connection_error() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://example.com")
 
         with pytest.raises(ConnectionError):
@@ -330,9 +357,9 @@ def test_connection_error():
     assert_reset()
 
 
-def test_match_querystring():
+def test_match_querystring() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com?test=1&foo=bar"
         responses.add(responses.GET, url, match_querystring=True, body=b"test")
         resp = requests.get("http://example.com?test=1&foo=bar")
@@ -346,9 +373,9 @@ def test_match_querystring():
     assert_reset()
 
 
-def test_match_querystring_empty():
+def test_match_querystring_empty() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(
             responses.GET, "http://example.com", body=b"test", match_querystring=True
         )
@@ -363,9 +390,9 @@ def test_match_querystring_empty():
     assert_reset()
 
 
-def test_match_querystring_error():
+def test_match_querystring_error() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(
             responses.GET, "http://example.com/?test=1", match_querystring=True
         )
@@ -377,9 +404,9 @@ def test_match_querystring_error():
     assert_reset()
 
 
-def test_match_querystring_regex():
+def test_match_querystring_regex() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         """Note that `match_querystring` value shouldn't matter when passing a
         regular expression"""
 
@@ -407,9 +434,9 @@ def test_match_querystring_regex():
     assert_reset()
 
 
-def test_match_querystring_error_regex():
+def test_match_querystring_error_regex() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         """Note that `match_querystring` value shouldn't matter when passing a
         regular expression"""
 
@@ -435,9 +462,9 @@ def test_match_querystring_error_regex():
     assert_reset()
 
 
-def test_match_querystring_auto_activates():
+def test_match_querystring_auto_activates() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://example.com?test=1", body=b"test")
         resp = requests.get("http://example.com?test=1")
         assert_response(resp, "test")
@@ -448,9 +475,9 @@ def test_match_querystring_auto_activates():
     assert_reset()
 
 
-def test_match_querystring_missing_key():
+def test_match_querystring_missing_key() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://example.com?foo=1&bar=2", body=b"test")
         with pytest.raises(ConnectionError):
             requests.get("http://example.com/?foo=1&baz=2")
@@ -462,9 +489,9 @@ def test_match_querystring_missing_key():
     assert_reset()
 
 
-def test_accept_string_body():
+def test_accept_string_body() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com/"
         responses.add(responses.GET, url, body="test")
         resp = requests.get(url)
@@ -474,9 +501,9 @@ def test_accept_string_body():
     assert_reset()
 
 
-def test_accept_json_body():
+def test_accept_json_body() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         content_type = "application/json"
 
         url = "http://example.com/"
@@ -493,9 +520,9 @@ def test_accept_json_body():
     assert_reset()
 
 
-def test_no_content_type():
+def test_no_content_type() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com/"
         responses.add(responses.GET, url, body="test", content_type=None)
         resp = requests.get(url)
@@ -505,9 +532,9 @@ def test_no_content_type():
     assert_reset()
 
 
-def test_arbitrary_status_code():
+def test_arbitrary_status_code() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com/"
         responses.add(responses.GET, url, body="test", status=419)
         resp = requests.get(url)
@@ -518,9 +545,9 @@ def test_arbitrary_status_code():
     assert_reset()
 
 
-def test_throw_connection_error_explicit():
+def test_throw_connection_error_explicit() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com"
         exception = HTTPError("HTTP Error")
         responses.add(responses.GET, url, exception)
@@ -534,7 +561,7 @@ def test_throw_connection_error_explicit():
     assert_reset()
 
 
-def test_callback():
+def test_callback() -> None:
     body = b"test callback"
     status = 400
     reason = "Bad Request"
@@ -549,7 +576,7 @@ def test_callback():
         return status, headers, body
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add_callback(responses.GET, url, request_callback)
         resp = requests.get(url)
         assert resp.text == "test callback"
@@ -563,7 +590,7 @@ def test_callback():
     assert_reset()
 
 
-def test_deprecated_package_attributes():
+def test_deprecated_package_attributes() -> None:
     """Validates that deprecation warning is raised when package attributes are called."""
     # keep separate context manager to avoid leakage
     with pytest.deprecated_call():
@@ -576,17 +603,17 @@ def test_deprecated_package_attributes():
         responses.target
 
 
-def test_callback_deprecated_stream_argument():
+def test_callback_deprecated_stream_argument() -> None:
     with pytest.deprecated_call():
         CallbackResponse(responses.GET, "url", lambda x: x, stream=False)
 
 
-def test_callback_deprecated_match_querystring_argument():
+def test_callback_deprecated_match_querystring_argument() -> None:
     with pytest.deprecated_call():
         CallbackResponse(responses.GET, "url", lambda x: x, match_querystring=False)
 
 
-def test_callback_match_querystring_default_false():
+def test_callback_match_querystring_default_false() -> None:
     """
     Test to ensure that by default 'match_querystring' in 'add_callback' is set to False
     and does not raise deprecation
@@ -602,7 +629,7 @@ def test_callback_match_querystring_default_false():
         return status, headers, body
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add_callback(responses.GET, url, request_callback, content_type=None)
         resp = requests.get(url, params=params)
         assert resp.text == "test callback"
@@ -616,15 +643,15 @@ def test_callback_match_querystring_default_false():
     assert_reset()
 
 
-def test_callback_exception_result():
+def test_callback_exception_result() -> None:
     result = Exception()
     url = "http://example.com/"
 
-    def request_callback(_request):
+    def request_callback(_request: requests.PreparedRequest) -> Exception:
         return result
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add_callback(responses.GET, url, request_callback)
 
         with pytest.raises(Exception) as e:
@@ -636,15 +663,17 @@ def test_callback_exception_result():
     assert_reset()
 
 
-def test_callback_exception_body():
+def test_callback_exception_body() -> None:
     body = Exception()
     url = "http://example.com/"
 
-    def request_callback(_request):
+    def request_callback(
+        _request: requests.PreparedRequest,
+    ) -> Tuple[int, Dict, Exception]:
         return 200, {}, body
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add_callback(responses.GET, url, request_callback)
 
         with pytest.raises(Exception) as e:
@@ -656,18 +685,18 @@ def test_callback_exception_body():
     assert_reset()
 
 
-def test_callback_no_content_type():
+def test_callback_no_content_type() -> None:
     body = b"test callback"
     status = 400
     reason = "Bad Request"
     headers = {"foo": "bar"}
     url = "http://example.com/"
 
-    def request_callback(_request):
+    def request_callback(_request: requests.PreparedRequest) -> Tuple[int, Dict, bytes]:
         return status, headers, body
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add_callback(responses.GET, url, request_callback, content_type=None)
         resp = requests.get(url)
         assert resp.text == "test callback"
@@ -680,8 +709,8 @@ def test_callback_no_content_type():
     assert_reset()
 
 
-def test_callback_content_type_dict():
-    def request_callback(_request):
+def test_callback_content_type_dict() -> None:
+    def request_callback(_request: requests.PreparedRequest) -> Tuple[int, Dict, bytes]:
         return (
             200,
             {"Content-Type": "application/json"},
@@ -689,7 +718,7 @@ def test_callback_content_type_dict():
         )
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add_callback("GET", "http://mockhost/.foo", callback=request_callback)
         resp = requests.get("http://mockhost/.foo")
         assert resp.text == "foo"
@@ -699,8 +728,8 @@ def test_callback_content_type_dict():
     assert_reset()
 
 
-def test_callback_matchers():
-    def request_callback(_request):
+def test_callback_matchers() -> None:
+    def request_callback(_request: requests.PreparedRequest) -> Tuple[int, Dict, bytes]:
         return (
             200,
             {"Content-Type": "application/json"},
@@ -708,7 +737,7 @@ def test_callback_matchers():
         )
 
     @responses.activate
-    def run():
+    def run() -> None:
         req_data = {"some": "other", "data": "fields"}
         req_files = {"file_name": b"Old World!"}
 
@@ -726,9 +755,9 @@ def test_callback_matchers():
     assert_reset()
 
 
-def test_callback_matchers_fail():
+def test_callback_matchers_fail() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         req_data = {"some": "other", "data": "fields"}
         req_files = {"file_name": b"Old World!"}
 
@@ -755,8 +784,8 @@ def test_callback_matchers_fail():
     assert_reset()
 
 
-def test_callback_content_type_tuple():
-    def request_callback(_request):
+def test_callback_content_type_tuple() -> None:
+    def request_callback(_request: requests.PreparedRequest) -> Tuple[int, List, bytes]:
         return (
             200,
             [("Content-Type", "application/json")],
@@ -764,7 +793,7 @@ def test_callback_content_type_tuple():
         )
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add_callback("GET", "http://mockhost/.foo", callback=request_callback)
         resp = requests.get("http://mockhost/.foo")
         assert resp.text == "foo"
@@ -774,9 +803,9 @@ def test_callback_content_type_tuple():
     assert_reset()
 
 
-def test_regular_expression_url():
+def test_regular_expression_url() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = re.compile(r"https?://(.*\.)?example.com")
         responses.add(responses.GET, url, body=b"test")
 
@@ -796,7 +825,7 @@ def test_regular_expression_url():
     assert_reset()
 
 
-def test_base_response_get_response():
+def test_base_response_get_response() -> None:
     resp = BaseResponse("GET", ".com")
     with pytest.raises(NotImplementedError):
         resp.get_response(requests.PreparedRequest())
@@ -806,7 +835,7 @@ class TestAdapters:
     class CustomAdapter(requests.adapters.HTTPAdapter):
         """Classic custom adapter."""
 
-        def send(self, *a, **k):
+        def send(self, *a: Any, **k: Any) -> requests.Response:
             return super().send(*a, **k)
 
     class PositionalArgsAdapter(requests.adapters.HTTPAdapter):
@@ -816,13 +845,15 @@ class TestAdapters:
 
         def send(
             self,
-            request,
-            stream=False,
-            timeout=None,
-            verify=True,
-            cert=None,
-            proxies=None,
-        ):
+            request: requests.PreparedRequest,
+            stream: bool = False,
+            timeout: Union[float, Tuple[float, float], Tuple[float, None], None] = None,
+            verify: Union[bool, str] = True,
+            cert: Union[
+                bytes, str, Tuple[Union[bytes, str], Union[bytes, str]], None
+            ] = None,
+            proxies: Optional[Mapping[str, str]] = None,
+        ) -> requests.Response:
             return super().send(request, stream, timeout, verify, cert, proxies)
 
     class PositionalArgsIncompleteAdapter(requests.adapters.HTTPAdapter):
@@ -833,13 +864,15 @@ class TestAdapters:
 
         def send(
             self,
-            request,
-            stream=False,
-            timeout=None,
-            verify=True,
+            request: requests.PreparedRequest,
+            stream: bool = False,
+            timeout: Union[float, Tuple[float, float], Tuple[float, None], None] = None,
+            verify: Union[bool, str] = True,
             # following args are intentionally not forwarded
-            cert=None,
-            proxies=None,
+            cert: Union[
+                bytes, str, Tuple[Union[bytes, str], Union[bytes, str]], None
+            ] = None,
+            proxies: Optional[Mapping[str, str]] = None,
         ):
             return super().send(request, stream, timeout, verify)
 
@@ -847,11 +880,13 @@ class TestAdapters:
         "adapter_class",
         (CustomAdapter, PositionalArgsAdapter, PositionalArgsIncompleteAdapter),
     )
-    def test_custom_adapter(self, adapter_class):
+    def test_custom_adapter(
+        self, adapter_class: Type[requests.adapters.HTTPAdapter]
+    ) -> None:
         """Test basic adapter implementation and that responses can patch them properly."""
 
         @responses.activate
-        def run():
+        def run() -> None:
             url = "http://example.com"
             responses.add(responses.GET, url, body=b"test adapter")
 
@@ -868,8 +903,8 @@ class TestAdapters:
         run()
 
 
-def test_responses_as_context_manager():
-    def run():
+def test_responses_as_context_manager() -> None:
+    def run() -> None:
         with responses.mock:
             responses.add(responses.GET, "http://example.com", body=b"test")
             resp = requests.get("http://example.com")
@@ -888,8 +923,8 @@ def test_responses_as_context_manager():
     assert_reset()
 
 
-def test_activate_doesnt_change_signature():
-    def test_function(a, b=None):
+def test_activate_doesnt_change_signature() -> None:
+    def test_function(a: int, b: Optional[int] = None) -> Tuple[int, Optional[int]]:
         return a, b
 
     decorated_test_function = responses.activate(test_function)
@@ -902,12 +937,12 @@ def test_activate_doesnt_change_signature():
 
 
 @pytest.fixture
-def my_fruit():
+def my_fruit() -> str:
     return "apple"
 
 
 @pytest.fixture
-def fruit_basket(my_fruit):
+def fruit_basket(my_fruit: str) -> List[str]:
     return ["banana", my_fruit]
 
 
@@ -917,16 +952,16 @@ class TestFixtures:
     Test that pytest fixtures work well with 'activate' decorator
     """
 
-    def test_function(self, my_fruit, fruit_basket):
+    def test_function(self, my_fruit: str, fruit_basket: List[str]) -> None:
         assert my_fruit in fruit_basket
         assert my_fruit == "apple"
 
     test_function_decorated = responses.activate(test_function)
 
 
-def test_activate_mock_interaction():
+def test_activate_mock_interaction() -> None:
     @patch("sys.stdout")
-    def test_function(mock_stdout):
+    def test_function(mock_stdout: Mock) -> Mock:
         return mock_stdout
 
     decorated_test_function = responses.activate(test_function)
@@ -941,8 +976,8 @@ def test_activate_mock_interaction():
     assert isinstance(value, Mock)
 
 
-def test_activate_doesnt_change_signature_with_return_type():
-    def test_function(a, b=None):
+def test_activate_doesnt_change_signature_with_return_type() -> None:
+    def test_function(a: int, b: Optional[int] = None) -> Tuple[int, Optional[int]]:
         return a, b
 
     # Add type annotations as they are syntax errors in py2.
@@ -959,9 +994,11 @@ def test_activate_doesnt_change_signature_with_return_type():
     assert decorated_test_function(3) == test_function(3)
 
 
-def test_activate_doesnt_change_signature_for_method():
+def test_activate_doesnt_change_signature_for_method() -> None:
     class TestCase:
-        def test_function(self, a, b=None):
+        def test_function(
+            self, a: int, b: Optional[int] = None
+        ) -> "Tuple[TestCase, int, Optional[int]]":
             return self, a, b
 
         decorated_test_function = responses.activate(test_function)
@@ -971,17 +1008,17 @@ def test_activate_doesnt_change_signature_for_method():
     assert test_case.decorated_test_function(3) == test_case.test_function(3)
 
 
-def test_response_cookies():
+def test_response_cookies() -> None:
     body = b"test callback"
     status = 200
     headers = {"set-cookie": "session_id=12345; a=b; c=d"}
     url = "http://example.com/"
 
-    def request_callback(_request):
+    def request_callback(_request: requests.PreparedRequest) -> Tuple[int, Dict, bytes]:
         return status, headers, body
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add_callback(responses.GET, url, request_callback)
         resp = requests.get(url)
         assert resp.text == "test callback"
@@ -994,17 +1031,17 @@ def test_response_cookies():
     assert_reset()
 
 
-def test_response_cookies_secure():
+def test_response_cookies_secure() -> None:
     body = b"test callback"
     status = 200
     headers = {"set-cookie": "session_id=12345; a=b; c=d; secure"}
     url = "http://example.com/"
 
-    def request_callback(_request):
+    def request_callback(_request: requests.PreparedRequest) -> Tuple[int, Dict, bytes]:
         return status, headers, body
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add_callback(responses.GET, url, request_callback)
         resp = requests.get(url)
         assert resp.text == "test callback"
@@ -1017,7 +1054,7 @@ def test_response_cookies_secure():
     assert_reset()
 
 
-def test_response_cookies_multiple():
+def test_response_cookies_multiple() -> None:
     body = b"test callback"
     status = 200
     headers = [
@@ -1026,11 +1063,11 @@ def test_response_cookies_multiple():
     ]
     url = "http://example.com/"
 
-    def request_callback(_request):
+    def request_callback(_request: requests.PreparedRequest) -> Tuple[int, Dict, bytes]:
         return status, headers, body
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add_callback(responses.GET, url, request_callback)
         resp = requests.get(url)
         assert resp.text == "test callback"
@@ -1045,9 +1082,11 @@ def test_response_cookies_multiple():
 
 @pytest.mark.parametrize("request_stream", (True, False, None))
 @pytest.mark.parametrize("responses_stream", (True, False, None))
-def test_response_cookies_session(request_stream, responses_stream):
+def test_response_cookies_session(
+    request_stream: Optional[bool], responses_stream: Optional[bool]
+) -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "https://example.com/path"
         responses.add(
             responses.GET,
@@ -1075,11 +1114,11 @@ def test_response_cookies_session(request_stream, responses_stream):
     assert_reset()
 
 
-def test_response_callback():
+def test_response_callback() -> None:
     """adds a callback to decorate the response, then checks it"""
 
-    def run():
-        def response_callback(response):
+    def run() -> None:
+        def response_callback(response: requests.Response) -> requests.Response:
             response._is_mocked = True
             return response
 
@@ -1094,10 +1133,10 @@ def test_response_callback():
     assert_reset()
 
 
-def test_response_filebody():
+def test_response_filebody() -> None:
     """Adds the possibility to use actual (binary) files as responses"""
 
-    def run():
+    def run() -> None:
         current_file = os.path.abspath(__file__)
         with responses.RequestsMock() as m:
             with open(current_file, encoding="utf-8") as out:
@@ -1110,9 +1149,9 @@ def test_response_filebody():
     assert_reset()
 
 
-def test_use_stream_twice_to_double_raw_io():
+def test_use_stream_twice_to_double_raw_io() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com"
         responses.add(responses.GET, url, body=b"42", stream=True)
         resp = requests.get(url, stream=True)
@@ -1122,11 +1161,11 @@ def test_use_stream_twice_to_double_raw_io():
     assert_reset()
 
 
-def test_assert_all_requests_are_fired():
-    def request_callback(_request):
+def test_assert_all_requests_are_fired() -> None:
+    def request_callback(_request: requests.PreparedRequest) -> Exception:
         raise BaseException()
 
-    def run():
+    def run() -> None:
         with pytest.raises(AssertionError) as excinfo:
             with responses.RequestsMock(assert_all_requests_are_fired=True) as m:
                 m.add(responses.GET, "http://example.com", body=b"test")
@@ -1170,16 +1209,16 @@ def test_assert_all_requests_are_fired():
     assert_reset()
 
 
-def test_assert_all_requests_fired_multiple():
+def test_assert_all_requests_fired_multiple() -> None:
     @responses.activate(assert_all_requests_are_fired=True)
-    def test_some_function():
+    def test_some_function() -> None:
         # Not all mocks are called so we'll get an AssertionError
         responses.add(responses.GET, "http://other_url", json={})
         responses.add(responses.GET, "http://some_api", json={})
         requests.get("http://some_api")
 
     @responses.activate(assert_all_requests_are_fired=True)
-    def test_some_second_function():
+    def test_some_second_function() -> None:
         # This should pass as mocks should be reset.
         responses.add(responses.GET, "http://some_api", json={})
         requests.get("http://some_api")
@@ -1192,13 +1231,17 @@ def test_assert_all_requests_fired_multiple():
     assert_reset()
 
 
-def test_allow_redirects_samehost():
+def test_allow_redirects_samehost() -> None:
     redirecting_url = "http://example.com"
     final_url_path = "/1"
     final_url = f"{redirecting_url}{final_url_path}"
     url_re = re.compile(r"^http://example.com(/)?(\d+)?$")
 
-    def request_callback(request):
+    def request_callback(
+        request: requests.PreparedRequest,
+    ) -> Tuple[int, Dict, Optional[bytes]]:
+        assert request.url is not None
+
         # endpoint of chained redirect
         if request.url.endswith(final_url_path):
             return 200, (), b"test"
@@ -1212,7 +1255,7 @@ def test_allow_redirects_samehost():
             redirect_headers = {"location": f"/{n!s}"}
             return 301, redirect_headers, None
 
-    def run():
+    def run() -> None:
         # setup redirect
         with responses.mock:
             responses.add_callback(responses.GET, url_re, request_callback)
@@ -1237,7 +1280,7 @@ def test_allow_redirects_samehost():
     assert_reset()
 
 
-def test_path_segments():
+def test_path_segments() -> None:
     """Test that path segment after ``;`` is preserved.
 
     Validate compliance with RFC 3986.
@@ -1248,7 +1291,7 @@ def test_path_segments():
     """
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://example.com/here/we", status=669)
         responses.add(responses.GET, "http://example.com/here/we;go", status=777)
 
@@ -1259,11 +1302,11 @@ def test_path_segments():
     assert_reset()
 
 
-def test_handles_unicode_querystring():
+def test_handles_unicode_querystring() -> None:
     url = "http://example.com/test?type=2&ie=utf8&query=汉字"
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, url, body="test", match_querystring=True)
 
         resp = requests.get(url)
@@ -1274,11 +1317,11 @@ def test_handles_unicode_querystring():
     assert_reset()
 
 
-def test_handles_unicode_url():
+def test_handles_unicode_url() -> None:
     url = "http://www.संजाल.भारत/hi/वेबसाइट-डिजाइन"
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, url, body="test")
 
         resp = requests.get(url)
@@ -1289,11 +1332,11 @@ def test_handles_unicode_url():
     assert_reset()
 
 
-def test_handles_unicode_body():
+def test_handles_unicode_body() -> None:
     url = "http://example.com/test"
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, url, body="михољско лето")
 
         resp = requests.get(url)
@@ -1304,11 +1347,11 @@ def test_handles_unicode_body():
     assert_reset()
 
 
-def test_handles_buffered_reader_body():
+def test_handles_buffered_reader_body() -> None:
     url = "http://example.com/test"
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, url, body=BufferedReader(BytesIO(b"test")))  # type: ignore
 
         resp = requests.get(url)
@@ -1319,9 +1362,9 @@ def test_handles_buffered_reader_body():
     assert_reset()
 
 
-def test_headers():
+def test_headers() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(
             responses.GET, "http://example.com", body="", headers={"X-Test": "foo"}
         )
@@ -1332,14 +1375,14 @@ def test_headers():
     assert_reset()
 
 
-def test_headers_deduplicated_content_type():
+def test_headers_deduplicated_content_type() -> None:
     """Test to ensure that we do not have two values for `content-type`.
 
     For more details see https://github.com/getsentry/responses/issues/644
     """
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.get(
             "https://example.org/",
             json={},
@@ -1355,7 +1398,7 @@ def test_headers_deduplicated_content_type():
     assert_reset()
 
 
-def test_content_length_error(monkeypatch):
+def test_content_length_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Currently 'requests' does not enforce content length validation,
     (validation that body length matches header). However, this could
@@ -1369,7 +1412,7 @@ def test_content_length_error(monkeypatch):
     """
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(
             responses.GET,
             "http://example.com/api/123",
@@ -1384,26 +1427,26 @@ def test_content_length_error(monkeypatch):
     # Type errors here and on 1250 are ignored because the stubs for requests
     # are off https://github.com/python/typeshed/blob/f8501d33c737482a829c6db557a0be26895c5941
     #   /stubs/requests/requests/packages/__init__.pyi#L1
-    original_init = getattr(urllib3.HTTPResponse, "__init__")  # type: ignore
+    original_init = getattr(urllib3.HTTPResponse, "__init__")
 
-    def patched_init(self, *args, **kwargs):
+    def patched_init(self: urllib3.HTTPResponse, *args: Any, **kwargs: Any) -> None:
         kwargs["enforce_content_length"] = True
         original_init(self, *args, **kwargs)
 
-    monkeypatch.setattr(urllib3.HTTPResponse, "__init__", patched_init)  # type: ignore
+    monkeypatch.setattr(urllib3.HTTPResponse, "__init__", patched_init)
 
     run()
     assert_reset()
 
 
-def test_stream_with_none_chunk_size():
+def test_stream_with_none_chunk_size() -> None:
     """
     See discussion in
     https://github.com/getsentry/responses/issues/438
     """
 
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(
             responses.GET,
             "https://example.com",
@@ -1420,9 +1463,9 @@ def test_stream_with_none_chunk_size():
     assert_reset()
 
 
-def test_legacy_adding_headers():
+def test_legacy_adding_headers() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(
             responses.GET,
             "http://example.com",
@@ -1436,9 +1479,9 @@ def test_legacy_adding_headers():
     assert_reset()
 
 
-def test_legacy_adding_headers_with_content_type():
+def test_legacy_adding_headers_with_content_type() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         with pytest.raises(RuntimeError) as excinfo:
             responses.add(
                 responses.GET,
@@ -1456,9 +1499,9 @@ def test_legacy_adding_headers_with_content_type():
     assert_reset()
 
 
-def test_auto_calculate_content_length_string_body():
+def test_auto_calculate_content_length_string_body() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com/"
         responses.add(
             responses.GET, url, body="test", auto_calculate_content_length=True
@@ -1471,9 +1514,9 @@ def test_auto_calculate_content_length_string_body():
     assert_reset()
 
 
-def test_auto_calculate_content_length_bytes_body():
+def test_auto_calculate_content_length_bytes_body() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com/"
         responses.add(
             responses.GET, url, body=b"test bytes", auto_calculate_content_length=True
@@ -1486,9 +1529,9 @@ def test_auto_calculate_content_length_bytes_body():
     assert_reset()
 
 
-def test_auto_calculate_content_length_json_body():
+def test_auto_calculate_content_length_json_body() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         content_type = "application/json"
 
         url = "http://example.com/"
@@ -1512,9 +1555,9 @@ def test_auto_calculate_content_length_json_body():
     assert_reset()
 
 
-def test_auto_calculate_content_length_unicode_body():
+def test_auto_calculate_content_length_unicode_body() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com/test"
         responses.add(
             responses.GET, url, body="михољско лето", auto_calculate_content_length=True
@@ -1527,9 +1570,9 @@ def test_auto_calculate_content_length_unicode_body():
     assert_reset()
 
 
-def test_auto_calculate_content_length_doesnt_work_for_buffered_reader_body():
+def test_auto_calculate_content_length_doesnt_work_for_buffered_reader_body() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com/test"
         responses.add(
             responses.GET,
@@ -1545,9 +1588,9 @@ def test_auto_calculate_content_length_doesnt_work_for_buffered_reader_body():
     assert_reset()
 
 
-def test_auto_calculate_content_length_doesnt_override_existing_value():
+def test_auto_calculate_content_length_doesnt_override_existing_value() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com/"
         responses.add(
             responses.GET,
@@ -1572,9 +1615,9 @@ def test_auto_calculate_content_length_doesnt_override_existing_value():
     assert_reset()
 
 
-def test_multiple_responses():
+def test_multiple_responses() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://example.com", body="test")
         responses.add(responses.GET, "http://example.com", body="rest")
         responses.add(responses.GET, "http://example.com", body="fest")
@@ -1600,9 +1643,9 @@ def test_multiple_responses():
     assert_reset()
 
 
-def test_multiple_responses_intermixed():
+def test_multiple_responses_intermixed() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://example.com", body="test")
         resp = requests.get("http://example.com")
         assert_response(resp, "test")
@@ -1623,9 +1666,9 @@ def test_multiple_responses_intermixed():
     assert_reset()
 
 
-def test_multiple_urls():
+def test_multiple_urls() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://example.com/one", body="one")
         responses.add(responses.GET, "http://example.com/two", body="two")
 
@@ -1638,9 +1681,9 @@ def test_multiple_urls():
     assert_reset()
 
 
-def test_multiple_methods():
+def test_multiple_methods() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://example.com/one", body="gotcha")
         responses.add(responses.POST, "http://example.com/one", body="posted")
 
@@ -1654,7 +1697,7 @@ def test_multiple_methods():
 
 
 class TestPassthru:
-    def test_passthrough_flag(self, httpserver):
+    def test_passthrough_flag(self, httpserver: HTTPServer) -> None:
         httpserver.expect_request("/").respond_with_data(
             "OK", content_type="text/plain"
         )
@@ -1663,13 +1706,13 @@ class TestPassthru:
         response = Response(responses.GET, url, body="MOCK")
 
         @responses.activate
-        def run_passthrough():
+        def run_passthrough() -> None:
             responses.add(response)
             resp = requests.get(url)
             assert_response(resp, "OK")
 
         @responses.activate
-        def run_mocked():
+        def run_mocked() -> None:
             responses.add(response)
             resp = requests.get(url)
             assert_response(resp, "MOCK")
@@ -1681,23 +1724,23 @@ class TestPassthru:
         run_passthrough()
         assert_reset()
 
-    def test_passthrough_kwarg(self, httpserver):
+    def test_passthrough_kwarg(self, httpserver: HTTPServer) -> None:
         httpserver.expect_request("/").respond_with_data(
             "OK", content_type="text/plain"
         )
         url = httpserver.url_for("/")
 
-        def configure_response(passthrough):
+        def configure_response(passthrough: bool) -> None:
             responses.get(url, body="MOCK", passthrough=passthrough)
 
         @responses.activate
-        def run_passthrough():
+        def run_passthrough() -> None:
             configure_response(passthrough=True)
             resp = requests.get(url)
             assert_response(resp, "OK")
 
         @responses.activate
-        def run_mocked():
+        def run_mocked() -> None:
             configure_response(passthrough=False)
             resp = requests.get(url)
             assert_response(resp, "MOCK")
@@ -1708,14 +1751,14 @@ class TestPassthru:
         run_passthrough()
         assert_reset()
 
-    def test_passthrough_response(self, httpserver):
+    def test_passthrough_response(self, httpserver: HTTPServer) -> None:
         httpserver.expect_request("/").respond_with_data(
             "OK", content_type="text/plain"
         )
         url = httpserver.url_for("/")
 
         @responses.activate
-        def run():
+        def run() -> None:
             responses.add(PassthroughResponse(responses.GET, url))
             responses.add(responses.GET, f"{url}/one", body="one")
             responses.add(responses.GET, "http://example.com/two", body="two")
@@ -1733,13 +1776,13 @@ class TestPassthru:
         run()
         assert_reset()
 
-    def test_passthrough_response_stream(self, httpserver):
+    def test_passthrough_response_stream(self, httpserver: HTTPServer) -> None:
         httpserver.expect_request("/").respond_with_data(
             "OK", content_type="text/plain"
         )
 
         @responses.activate
-        def run():
+        def run() -> None:
             url = httpserver.url_for("/")
             responses.add(PassthroughResponse(responses.GET, url))
             content_1 = requests.get(url).content
@@ -1750,20 +1793,20 @@ class TestPassthru:
         run()
         assert_reset()
 
-    def test_passthru_prefixes(self, httpserver):
+    def test_passthru_prefixes(self, httpserver: HTTPServer) -> None:
         httpserver.expect_request("/").respond_with_data(
             "OK", content_type="text/plain"
         )
         url = httpserver.url_for("/")
 
         @responses.activate
-        def run_constructor_argument():
+        def run_constructor_argument() -> None:
             with responses.RequestsMock(passthru_prefixes=(url,)):
                 resp = requests.get(url)
                 assert_response(resp, "OK")
 
         @responses.activate
-        def run_property_setter():
+        def run_property_setter() -> None:
             with responses.RequestsMock() as m:
                 m.passthru_prefixes = tuple([url])
                 resp = requests.get(url)
@@ -1774,14 +1817,14 @@ class TestPassthru:
         run_property_setter()
         assert_reset()
 
-    def test_passthru(self, httpserver):
+    def test_passthru(self, httpserver: HTTPServer) -> None:
         httpserver.expect_request("/").respond_with_data(
             "OK", content_type="text/plain"
         )
         url = httpserver.url_for("/")
 
         @responses.activate
-        def run():
+        def run() -> None:
             responses.add_passthru(url)
             responses.add(responses.GET, f"{url}/one", body="one")
             responses.add(responses.GET, "http://example.com/two", body="two")
@@ -1796,14 +1839,14 @@ class TestPassthru:
         run()
         assert_reset()
 
-    def test_passthru_regex(self, httpserver):
+    def test_passthru_regex(self, httpserver: HTTPServer) -> None:
         httpserver.expect_request(re.compile("^/\\w+")).respond_with_data(
             "OK", content_type="text/plain"
         )
         url = httpserver.url_for("/")
 
         @responses.activate
-        def run():
+        def run() -> None:
             responses.add_passthru(re.compile(f"{url}/\\w+"))
             responses.add(responses.GET, f"{url}/one", body="one")
             responses.add(responses.GET, "http://example.com/two", body="two")
@@ -1820,7 +1863,9 @@ class TestPassthru:
         run()
         assert_reset()
 
-    def test_passthru_does_not_persist_across_tests(self, httpserver):
+    def test_passthru_does_not_persist_across_tests(
+        self, httpserver: HTTPServer
+    ) -> None:
         """
         passthru should be erased on exit from context manager
         see:
@@ -1831,7 +1876,7 @@ class TestPassthru:
         )
 
         @responses.activate
-        def with_a_passthru():
+        def with_a_passthru() -> None:
             assert not responses.mock.passthru_prefixes
             responses.add_passthru(re.compile(".*"))
 
@@ -1841,7 +1886,7 @@ class TestPassthru:
             assert response.text == "mocked server"
 
         @responses.activate
-        def without_a_passthru():
+        def without_a_passthru() -> None:
             assert not responses.mock.passthru_prefixes
             with pytest.raises(requests.exceptions.ConnectionError):
                 requests.get("https://example.com")
@@ -1849,9 +1894,9 @@ class TestPassthru:
         with_a_passthru()
         without_a_passthru()
 
-    def test_passthru_unicode(self):
+    def test_passthru_unicode(self) -> None:
         @responses.activate
-        def run():
+        def run() -> None:
             with responses.RequestsMock() as m:
                 url = "http://موقع.وزارة-الاتصالات.مصر/"
                 clean_url = "http://xn--4gbrim.xn----ymcbaaajlc6dj7bxne2c.xn--wgbh1c/"
@@ -1861,8 +1906,8 @@ class TestPassthru:
         run()
         assert_reset()
 
-    def test_real_send_argument(self):
-        def run():
+    def test_real_send_argument(self) -> None:
+        def run() -> None:
             # the following mock will serve to catch the real send request from another mock and
             # will "donate" `unbound_on_send` method
             mock_to_catch_real_send = responses.RequestsMock(
@@ -1890,9 +1935,9 @@ class TestPassthru:
         assert_reset()
 
 
-def test_method_named_param():
+def test_method_named_param() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(method=responses.GET, url="http://example.com", body="OK")
         resp = requests.get("http://example.com")
         assert_response(resp, "OK")
@@ -1901,7 +1946,7 @@ def test_method_named_param():
     assert_reset()
 
 
-def test_custom_target(monkeypatch):
+def test_custom_target(monkeypatch: pytest.MonkeyPatch) -> None:
     requests_mock = responses.RequestsMock(target="something.else")
     std_mock_mock = responses.std_mock.MagicMock()
     patch_mock = std_mock_mock.patch
@@ -1919,9 +1964,9 @@ def test_custom_target(monkeypatch):
         "http://example.com/other/path/",
     ),
 )
-def test_request_param(url):
+def test_request_param(url: str) -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         params = {"hello": "world", "example": "params"}
         responses.add(
             method=responses.GET,
@@ -1941,9 +1986,9 @@ def test_request_param(url):
     assert_reset()
 
 
-def test_request_param_with_multiple_values_for_the_same_key():
+def test_request_param_with_multiple_values_for_the_same_key() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com"
         params = {"key1": ["one", "two"], "key2": "three"}
         responses.add(
@@ -1962,9 +2007,9 @@ def test_request_param_with_multiple_values_for_the_same_key():
 @pytest.mark.parametrize(
     "url", ("http://example.com", "http://example.com?hello=world")
 )
-def test_assert_call_count(url):
+def test_assert_call_count(url: str) -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, url)
         responses.add(responses.GET, "http://example1.com")
 
@@ -1993,9 +2038,9 @@ def test_assert_call_count(url):
     assert_reset()
 
 
-def test_call_count_with_matcher():
+def test_call_count_with_matcher() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         rsp = responses.add(
             responses.GET,
             "http://www.example.com",
@@ -2022,9 +2067,9 @@ def test_call_count_with_matcher():
     assert_reset()
 
 
-def test_call_count_without_matcher():
+def test_call_count_without_matcher() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         rsp = responses.add(responses.GET, "http://www.example.com")
         requests.get("http://www.example.com")
         requests.get("http://www.example.com")
@@ -2037,9 +2082,9 @@ def test_call_count_without_matcher():
     assert_reset()
 
 
-def test_response_calls_indexing_and_slicing():
+def test_response_calls_indexing_and_slicing() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "http://www.example.com")
         responses.add(responses.GET, "http://www.example.com/1")
         responses.add(responses.GET, "http://www.example.com/2")
@@ -2068,9 +2113,9 @@ def test_response_calls_indexing_and_slicing():
         ]
 
 
-def test_response_calls_and_registry_calls_are_equal():
+def test_response_calls_and_registry_calls_are_equal() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         rsp1 = responses.add(responses.GET, "http://www.example.com")
         rsp2 = responses.add(responses.GET, "http://www.example.com/1")
         rsp3 = responses.add(
@@ -2098,13 +2143,13 @@ def test_response_calls_and_registry_calls_are_equal():
     assert_reset()
 
 
-def test_fail_request_error():
+def test_fail_request_error() -> None:
     """
     Validate that exception is raised if request URL/Method/kwargs don't match
     :return:
     """
 
-    def run():
+    def run() -> None:
         with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
             rsps.add("POST", "http://example1.com")
             rsps.add("GET", "http://example.com")
@@ -2160,16 +2205,18 @@ def test_fail_request_error():
         ),
     ],
 )
-def test_response_representations(response_params, expected_representation):
+def test_response_representations(
+    response_params: Dict, expected_representation: str
+) -> None:
     response = Response(**response_params)
 
     assert str(response) == expected_representation
     assert repr(response) == expected_representation
 
 
-def test_mocked_responses_list_registered():
+def test_mocked_responses_list_registered() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         first_response = Response(
             responses.GET,
             "http://example.com/",
@@ -2206,9 +2253,9 @@ def test_mocked_responses_list_registered():
         ("http://fizzbuzz/foo", "http://fizzbuzz/foo"),
     ],
 )
-def test_rfc_compliance(url, other_url):
+def test_rfc_compliance(url: str, other_url: str) -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(method=responses.GET, url=url)
         resp = requests.request("GET", other_url)
         assert_response(resp, "")
@@ -2217,9 +2264,9 @@ def test_rfc_compliance(url, other_url):
     assert_reset()
 
 
-def test_requests_between_add():
+def test_requests_between_add() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(responses.GET, "https://example.com/", json={"response": "old"})
         assert requests.get("https://example.com/").content == b'{"response": "old"}'
         assert requests.get("https://example.com/").content == b'{"response": "old"}'
@@ -2235,9 +2282,9 @@ def test_requests_between_add():
     assert_reset()
 
 
-def test_responses_reuse():
+def test_responses_reuse() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "https://someapi.com/"
         fail_response = responses.Response(
             method="GET", url=url, body="fail", status=500
@@ -2260,9 +2307,9 @@ def test_responses_reuse():
     assert_reset()
 
 
-async def test_async_calls():
+async def test_async_calls() -> None:
     @responses.activate
-    async def run():
+    async def run() -> None:
         responses.add(
             responses.GET,
             "http://twitter.com/api/1/foobar",
@@ -2279,25 +2326,25 @@ async def test_async_calls():
 
 
 class TestStrictWrapper:
-    def test_strict_wrapper(self):
+    def test_strict_wrapper(self) -> None:
         """Test that assert_all_requests_are_fired could be applied to the decorator."""
 
         @responses.activate(assert_all_requests_are_fired=True)
-        def run_strict():
+        def run_strict() -> None:
             responses.add(responses.GET, "https://someapi1.com/", "success")
             responses.add(responses.GET, "https://notcalled1.com/", "success")
             requests.get("https://someapi1.com/")
             assert responses.mock.assert_all_requests_are_fired
 
         @responses.activate(assert_all_requests_are_fired=False)
-        def run_not_strict():
+        def run_not_strict() -> None:
             responses.add(responses.GET, "https://someapi2.com/", "success")
             responses.add(responses.GET, "https://notcalled2.com/", "success")
             requests.get("https://someapi2.com/")
             assert not responses.mock.assert_all_requests_are_fired
 
         @responses.activate
-        def run_classic():
+        def run_classic() -> None:
             responses.add(responses.GET, "https://someapi3.com/", "success")
             responses.add(responses.GET, "https://notcalled3.com/", "success")
             requests.get("https://someapi3.com/")
@@ -2314,7 +2361,7 @@ class TestStrictWrapper:
         run_not_strict()
 
     @pytest.mark.parametrize("assert_fired", (True, False, None))
-    def test_nested_decorators(self, assert_fired):
+    def test_nested_decorators(self, assert_fired: Optional[bool]) -> None:
         """Validate if assert_all_requests_are_fired is applied from the correct function.
 
         assert_all_requests_are_fired must be applied from the function
@@ -2323,13 +2370,13 @@ class TestStrictWrapper:
         """
 
         @responses.activate(assert_all_requests_are_fired=assert_fired)
-        def wrapped():
+        def wrapped() -> None:
             responses.add(responses.GET, "https://notcalled1.com/", "success")
             responses.add(responses.GET, "http://example.com/1", body="Hello 1")
             assert b"Hello 1" == requests.get("http://example.com/1").content
 
         @responses.activate(assert_all_requests_are_fired=not assert_fired)
-        def call_another_wrapped_function():
+        def call_another_wrapped_function() -> None:
             responses.add(responses.GET, "https://notcalled2.com/", "success")
             wrapped()
 
@@ -2354,15 +2401,15 @@ class TestMultipleWrappers:
     """
 
     @responses.activate
-    def test_wrapped(self):
+    def test_wrapped(self) -> None:
         responses.add(responses.GET, "http://example.com/1", body="Hello 1")
         assert b"Hello 1" == requests.get("http://example.com/1").content
 
     @responses.activate
-    def test_call_another_wrapped_function(self):
+    def test_call_another_wrapped_function(self) -> None:
         self.test_wrapped()
 
-    def test_mock_not_leaked(self, httpserver):
+    def test_mock_not_leaked(self, httpserver: HTTPServer) -> None:
         """
         Validate that ``responses.activate`` does not leak to unpatched test.
 
@@ -2382,9 +2429,9 @@ class TestMultipleWrappers:
 
 
 class TestShortcuts:
-    def test_delete(self):
+    def test_delete(self) -> None:
         @responses.activate
-        def run():
+        def run() -> None:
             responses.delete("http://example.com/1", status=888)
             resp = requests.delete("http://example.com/1")
             assert resp.status_code == 888
@@ -2392,9 +2439,9 @@ class TestShortcuts:
         run()
         assert_reset()
 
-    def test_get(self):
+    def test_get(self) -> None:
         @responses.activate
-        def run():
+        def run() -> None:
             responses.get("http://example.com/1", status=888)
             resp = requests.get("http://example.com/1")
             assert resp.status_code == 888
@@ -2402,9 +2449,9 @@ class TestShortcuts:
         run()
         assert_reset()
 
-    def test_head(self):
+    def test_head(self) -> None:
         @responses.activate
-        def run():
+        def run() -> None:
             responses.head("http://example.com/1", status=888)
             resp = requests.head("http://example.com/1")
             assert resp.status_code == 888
@@ -2412,9 +2459,9 @@ class TestShortcuts:
         run()
         assert_reset()
 
-    def test_options(self):
+    def test_options(self) -> None:
         @responses.activate
-        def run():
+        def run() -> None:
             responses.options("http://example.com/1", status=888)
             resp = requests.options("http://example.com/1")
             assert resp.status_code == 888
@@ -2422,9 +2469,9 @@ class TestShortcuts:
         run()
         assert_reset()
 
-    def test_patch(self):
+    def test_patch(self) -> None:
         @responses.activate
-        def run():
+        def run() -> None:
             responses.patch("http://example.com/1", status=888)
             resp = requests.patch("http://example.com/1")
             assert resp.status_code == 888
@@ -2432,9 +2479,9 @@ class TestShortcuts:
         run()
         assert_reset()
 
-    def test_post(self):
+    def test_post(self) -> None:
         @responses.activate
-        def run():
+        def run() -> None:
             responses.post("http://example.com/1", status=888)
             resp = requests.post("http://example.com/1")
             assert resp.status_code == 888
@@ -2442,9 +2489,9 @@ class TestShortcuts:
         run()
         assert_reset()
 
-    def test_put(self):
+    def test_put(self) -> None:
         @responses.activate
-        def run():
+        def run() -> None:
             responses.put("http://example.com/1", status=888)
             resp = requests.put("http://example.com/1")
             assert resp.status_code == 888
@@ -2460,19 +2507,19 @@ class TestUnitTestPatchSetup:
 
     """
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         self.r_mock = responses.RequestsMock(assert_all_requests_are_fired=True)
         self.r_mock.start()
         self.r_mock.get("https://example.com", status=505)
         self.r_mock.put("https://example.com", status=506)
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         self.r_mock.stop()
         self.r_mock.reset()
 
         assert_reset()
 
-    def test_function(self):
+    def test_function(self) -> None:
         resp = requests.get("https://example.com")
         assert resp.status_code == 505
 
@@ -2487,13 +2534,13 @@ class TestUnitTestPatchSetupRaises:
 
     """
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         self.r_mock = responses.RequestsMock()
         self.r_mock.start()
         self.r_mock.get("https://example.com", status=505)
         self.r_mock.put("https://example.com", status=506)
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         with pytest.raises(AssertionError) as exc:
             self.r_mock.stop()
         self.r_mock.reset()
@@ -2502,14 +2549,14 @@ class TestUnitTestPatchSetupRaises:
 
         assert_reset()
 
-    def test_function(self):
+    def test_function(self) -> None:
         resp = requests.get("https://example.com")
         assert resp.status_code == 505
 
 
-def test_reset_in_the_middle():
+def test_reset_in_the_middle() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         with responses.RequestsMock() as rsps2:
             rsps2.reset()
         responses.add(responses.GET, "https://example.invalid", status=200)
@@ -2520,9 +2567,9 @@ def test_reset_in_the_middle():
     assert_reset()
 
 
-def test_redirect():
+def test_redirect() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         # create multiple Response objects where first two contain redirect headers
         rsp1 = responses.Response(
             responses.GET,
@@ -2559,6 +2606,7 @@ def test_redirect():
             requests.get("http://example.com/1")
 
         assert exc_info.value.args[0] == "custom error"
+        assert exc_info.value.response is not None
         assert rsp1.url in exc_info.value.response.history[0].url
         assert rsp2.url in exc_info.value.response.history[1].url
 
@@ -2567,7 +2615,9 @@ def test_redirect():
 
 
 class TestMaxRetry:
-    def set_session(self, total=4, raise_on_status=True):
+    def set_session(
+        self, total: int = 4, raise_on_status: bool = True
+    ) -> requests.Session:
         session = requests.Session()
 
         adapter = requests.adapters.HTTPAdapter(
@@ -2582,11 +2632,11 @@ class TestMaxRetry:
         session.mount("https://", adapter)
         return session
 
-    def test_max_retries(self):
+    def test_max_retries(self) -> None:
         """This example is present in README.rst"""
 
         @responses.activate(registry=registries.OrderedRegistry)
-        def run():
+        def run() -> None:
             url = "https://example.com"
             rsp1 = responses.get(url, body="Error", status=500)
             rsp2 = responses.get(url, body="Error", status=500)
@@ -2607,9 +2657,9 @@ class TestMaxRetry:
         assert_reset()
 
     @pytest.mark.parametrize("raise_on_status", (True, False))
-    def test_max_retries_exceed(self, raise_on_status):
+    def test_max_retries_exceed(self, raise_on_status: bool) -> None:
         @responses.activate(registry=registries.OrderedRegistry)
-        def run():
+        def run() -> None:
             url = "https://example.com"
             rsp1 = responses.get(url, body="Error", status=500)
             rsp2 = responses.get(url, body="Error", status=500)
@@ -2631,9 +2681,9 @@ class TestMaxRetry:
         run()
         assert_reset()
 
-    def test_max_retries_exceed_msg(self):
+    def test_max_retries_exceed_msg(self) -> None:
         @responses.activate(registry=registries.OrderedRegistry)
-        def run():
+        def run() -> None:
             url = "https://example.com"
             responses.get(url, body="Error", status=500)
             responses.get(url, body="Error", status=500)
@@ -2648,11 +2698,11 @@ class TestMaxRetry:
         run()
         assert_reset()
 
-    def test_adapter_retry_untouched(self):
+    def test_adapter_retry_untouched(self) -> None:
         """Validate that every new request uses brand-new Retry object"""
 
         @responses.activate(registry=registries.OrderedRegistry)
-        def run():
+        def run() -> None:
             url = "https://example.com"
             error_rsp = responses.get(url, body="Error", status=500)
             responses.add(error_rsp)
@@ -2677,11 +2727,11 @@ class TestMaxRetry:
         assert_reset()
 
 
-def test_request_object_attached_to_exception():
+def test_request_object_attached_to_exception() -> None:
     """Validate that we attach `request` object to custom exception supplied as body"""
 
     @responses.activate
-    def run():
+    def run() -> None:
         url = "https://httpbin.org/delay/2"
         responses.get(url, body=requests.ReadTimeout())
 

@@ -8,12 +8,12 @@ from responses.registries import OrderedRegistry
 from responses.tests.test_responses import assert_reset
 
 
-def test_set_registry_not_empty():
+def test_set_registry_not_empty() -> None:
     class CustomRegistry(registries.FirstMatchRegistry):
         pass
 
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://fizzbuzz/foo"
         responses.add(method=responses.GET, url=url)
         with pytest.raises(AttributeError) as excinfo:
@@ -25,16 +25,16 @@ def test_set_registry_not_empty():
     assert_reset()
 
 
-def test_set_registry():
+def test_set_registry() -> None:
     class CustomRegistry(registries.FirstMatchRegistry):
         pass
 
     @responses.activate(registry=CustomRegistry)
-    def run_with_registry():
+    def run_with_registry() -> None:
         assert type(responses.mock.get_registry()) == CustomRegistry
 
     @responses.activate
-    def run():
+    def run() -> None:
         # test that registry does not leak to another test
         assert type(responses.mock.get_registry()) == registries.FirstMatchRegistry
 
@@ -43,19 +43,19 @@ def test_set_registry():
     assert_reset()
 
 
-def test_set_registry_reversed():
+def test_set_registry_reversed() -> None:
     """See https://github.com/getsentry/responses/issues/563"""
 
     class CustomRegistry(registries.FirstMatchRegistry):
         pass
 
     @responses.activate
-    def run():
+    def run() -> None:
         # test that registry does not leak to another test
         assert type(responses.mock.get_registry()) == registries.FirstMatchRegistry
 
     @responses.activate(registry=CustomRegistry)
-    def run_with_registry():
+    def run_with_registry() -> None:
         assert type(responses.mock.get_registry()) == CustomRegistry
 
     run()
@@ -63,17 +63,17 @@ def test_set_registry_reversed():
     assert_reset()
 
 
-async def test_registry_async():
+async def test_registry_async() -> None:
     class CustomRegistry(registries.FirstMatchRegistry):
         pass
 
     @responses.activate
-    async def run():
+    async def run() -> None:
         # test that registry does not leak to another test
         assert type(responses.mock.get_registry()) == registries.FirstMatchRegistry
 
     @responses.activate(registry=CustomRegistry)
-    async def run_with_registry():
+    async def run_with_registry() -> None:
         assert type(responses.mock.get_registry()) == CustomRegistry
 
     await run()
@@ -81,8 +81,8 @@ async def test_registry_async():
     assert_reset()
 
 
-def test_set_registry_context_manager():
-    def run():
+def test_set_registry_context_manager() -> None:
+    def run() -> None:
         class CustomRegistry(registries.FirstMatchRegistry):
             pass
 
@@ -96,8 +96,8 @@ def test_set_registry_context_manager():
     assert_reset()
 
 
-def test_registry_reset():
-    def run():
+def test_registry_reset() -> None:
+    def run() -> None:
         class CustomRegistry(registries.FirstMatchRegistry):
             pass
 
@@ -112,9 +112,9 @@ def test_registry_reset():
 
 
 class TestOrderedRegistry:
-    def test_invocation_index(self):
+    def test_invocation_index(self) -> None:
         @responses.activate(registry=OrderedRegistry)
-        def run():
+        def run() -> None:
             responses.add(
                 responses.GET,
                 "http://twitter.com/api/1/foobar",
@@ -148,9 +148,9 @@ class TestOrderedRegistry:
         run()
         assert_reset()
 
-    def test_not_match(self):
+    def test_not_match(self) -> None:
         @responses.activate(registry=OrderedRegistry)
-        def run():
+        def run() -> None:
             responses.add(
                 responses.GET,
                 "http://twitter.com/api/1/foobar",
@@ -185,9 +185,9 @@ class TestOrderedRegistry:
         run()
         assert_reset()
 
-    def test_empty_registry(self):
+    def test_empty_registry(self) -> None:
         @responses.activate(registry=OrderedRegistry)
-        def run():
+        def run() -> None:
             with pytest.raises(ConnectionError):
                 requests.get("http://twitter.com/api/1/foobar")
 

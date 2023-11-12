@@ -15,6 +15,11 @@ test: develop lint
 	py.test .
 	@echo ""
 
+static-test:
+	@echo "Running static tests"
+	tox -e mypy
+	@echo ""
+
 lint: install-pre-commit
 	@echo "Linting Python files"
 	pre-commit run -a

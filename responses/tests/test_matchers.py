@@ -1,5 +1,8 @@
 import gzip
 import re
+from typing import Any
+from typing import List
+from typing import Union
 from unittest.mock import Mock
 
 import pytest
@@ -12,9 +15,9 @@ from responses.tests.test_responses import assert_reset
 from responses.tests.test_responses import assert_response
 
 
-def test_query_string_matcher():
+def test_query_string_matcher() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com?test=1&foo=bar"
         responses.add(
             responses.GET,
@@ -33,9 +36,9 @@ def test_query_string_matcher():
     assert_reset()
 
 
-def test_request_matches_post_params():
+def test_request_matches_post_params() -> None:
     @responses.activate
-    def run(deprecated):
+    def run(deprecated: bool) -> None:
         if deprecated:
             json_params_matcher = getattr(responses, "json_params_matcher")
             urlencoded_params_matcher = getattr(responses, "urlencoded_params_matcher")
@@ -80,9 +83,9 @@ def test_request_matches_post_params():
     assert_reset()
 
 
-def test_json_params_matcher_not_strict():
+def test_json_params_matcher_not_strict() -> None:
     @responses.activate(assert_all_requests_are_fired=True)
-    def run():
+    def run() -> None:
         responses.add(
             method=responses.POST,
             url="http://example.com/",
@@ -110,9 +113,9 @@ def test_json_params_matcher_not_strict():
     assert_reset()
 
 
-def test_json_params_matcher_not_strict_diff_values():
+def test_json_params_matcher_not_strict_diff_values() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(
             method=responses.POST,
             url="http://example.com/",
@@ -140,7 +143,7 @@ def test_json_params_matcher_not_strict_diff_values():
     assert_reset()
 
 
-def test_json_params_matcher_json_list():
+def test_json_params_matcher_json_list() -> None:
     json_a = [{"a": "b"}]
     json_b = '[{"a": "b", "c": "d"}]'
     mock_request = Mock(body=json_b)
@@ -151,15 +154,15 @@ def test_json_params_matcher_json_list():
     )
 
 
-def test_json_params_matcher_json_list_empty():
-    json_a = []
+def test_json_params_matcher_json_list_empty() -> None:
+    json_a: List[Any] = []
     json_b = "[]"
     mock_request = Mock(body=json_b)
     result = matchers.json_params_matcher(json_a)(mock_request)
     assert result == (True, "")
 
 
-def test_json_params_matcher_body_is_gzipped():
+def test_json_params_matcher_body_is_gzipped() -> None:
     json_a = {"foo": 42, "bar": None}
     json_b = gzip.compress(b'{"foo": 42, "bar": null}')
     mock_request = Mock(body=json_b)
@@ -167,9 +170,9 @@ def test_json_params_matcher_body_is_gzipped():
     assert result == (True, "")
 
 
-def test_urlencoded_params_matcher_blank():
+def test_urlencoded_params_matcher_blank() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(
             method=responses.POST,
             url="http://example.com/",
@@ -193,9 +196,9 @@ def test_urlencoded_params_matcher_blank():
     assert_reset()
 
 
-def test_query_params_numbers():
+def test_query_params_numbers() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         expected_query_params = {"float": 5.0, "int": 2}
         responses.add(
             responses.GET,
@@ -210,9 +213,9 @@ def test_query_params_numbers():
     assert_reset()
 
 
-def test_query_param_matcher_loose():
+def test_query_param_matcher_loose() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         expected_query_params = {"only_one_param": "test"}
         responses.add(
             responses.GET,
@@ -229,9 +232,9 @@ def test_query_param_matcher_loose():
     assert_reset()
 
 
-def test_query_param_matcher_loose_fail():
+def test_query_param_matcher_loose_fail() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         expected_query_params = {"does_not_exist": "test"}
         responses.add(
             responses.GET,
@@ -256,8 +259,8 @@ def test_query_param_matcher_loose_fail():
     assert_reset()
 
 
-def test_request_matches_empty_body():
-    def run():
+def test_request_matches_empty_body() -> None:
+    def run() -> None:
         with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
             # test that both json and urlencoded body are empty in matcher and in request
             rsps.add(
@@ -328,9 +331,9 @@ def test_request_matches_empty_body():
     assert_reset()
 
 
-def test_request_matches_params():
+def test_request_matches_params() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com/test"
         params = {"hello": "world", "I am": "a big test"}
         responses.add(
@@ -359,7 +362,7 @@ def test_request_matches_params():
     assert_reset()
 
 
-def test_fail_matchers_error():
+def test_fail_matchers_error() -> None:
     """
     Validate that Exception is raised if request does not match responses.matchers
         validate matchers.urlencoded_params_matcher
@@ -369,7 +372,7 @@ def test_fail_matchers_error():
     :return: None
     """
 
-    def run():
+    def run() -> None:
         with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
             rsps.add(
                 "POST",
@@ -457,9 +460,11 @@ def test_fail_matchers_error():
         (b"\xacHello World!", b"\xacHello World!"),
     ],
 )
-def test_multipart_matcher(req_file, match_file):
+def test_multipart_matcher(
+    req_file: Union[str, bytes], match_file: Union[str, bytes]
+) -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         req_data = {"some": "other", "data": "fields"}
         responses.add(
             responses.POST,
@@ -486,14 +491,14 @@ def test_multipart_matcher(req_file, match_file):
     assert_reset()
 
 
-def test_multipart_matcher_fail():
+def test_multipart_matcher_fail() -> None:
     """
     Validate that Exception is raised if request does not match responses.matchers
         validate matchers.multipart_matcher
     :return: None
     """
 
-    def run():
+    def run() -> None:
         # different file contents
         with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
             req_data = {"some": "other", "data": "fields"}
@@ -565,14 +570,14 @@ def test_multipart_matcher_fail():
     assert_reset()
 
 
-def test_query_string_matcher_raises():
+def test_query_string_matcher_raises() -> None:
     """
     Validate that Exception is raised if request does not match responses.matchers
         validate matchers.query_string_matcher
             :return: None
     """
 
-    def run():
+    def run() -> None:
         with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
             rsps.add(
                 "GET",
@@ -593,9 +598,9 @@ def test_query_string_matcher_raises():
     assert_reset()
 
 
-def test_request_matches_headers():
+def test_request_matches_headers() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com/"
         responses.add(
             method=responses.GET,
@@ -624,9 +629,9 @@ def test_request_matches_headers():
     assert_reset()
 
 
-def test_request_matches_headers_no_match():
+def test_request_matches_headers_no_match() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com/"
         responses.add(
             method=responses.GET,
@@ -648,9 +653,9 @@ def test_request_matches_headers_no_match():
     assert_reset()
 
 
-def test_request_matches_headers_strict_match():
+def test_request_matches_headers_strict_match() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com/"
         responses.add(
             method=responses.GET,
@@ -701,9 +706,9 @@ def test_request_matches_headers_strict_match():
     assert_reset()
 
 
-def test_fragment_identifier_matcher():
+def test_fragment_identifier_matcher() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(
             responses.GET,
             "http://example.com",
@@ -718,9 +723,9 @@ def test_fragment_identifier_matcher():
     assert_reset()
 
 
-def test_fragment_identifier_matcher_error():
+def test_fragment_identifier_matcher_error() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         responses.add(
             responses.GET,
             "http://example.com/",
@@ -747,9 +752,9 @@ def test_fragment_identifier_matcher_error():
     assert_reset()
 
 
-def test_fragment_identifier_matcher_and_match_querystring():
+def test_fragment_identifier_matcher_and_match_querystring() -> None:
     @responses.activate
-    def run():
+    def run() -> None:
         url = "http://example.com?ab=xy&zed=qwe#test=1&foo=bar"
         responses.add(
             responses.GET,
@@ -769,7 +774,7 @@ def test_fragment_identifier_matcher_and_match_querystring():
     assert_reset()
 
 
-def test_matchers_create_key_val_str():
+def test_matchers_create_key_val_str() -> None:
     """
     Test that matchers._create_key_val_str does recursive conversion
     """
@@ -796,10 +801,10 @@ def test_matchers_create_key_val_str():
 
 class TestHeaderWithRegex:
     @property
-    def url(self):
+    def url(self) -> str:
         return "http://example.com/"
 
-    def _register(self):
+    def _register(self) -> None:
         responses.add(
             method=responses.GET,
             url=self.url,
@@ -815,9 +820,9 @@ class TestHeaderWithRegex:
             ],
         )
 
-    def test_request_matches_headers_regex(self):
+    def test_request_matches_headers_regex(self) -> None:
         @responses.activate
-        def run():
+        def run() -> None:
             # this one can not use common _register method because different headers
             responses.add(
                 method=responses.GET,
@@ -850,9 +855,9 @@ class TestHeaderWithRegex:
         run()
         assert_reset()
 
-    def test_request_matches_headers_regex_strict_match_regex_failed(self):
+    def test_request_matches_headers_regex_strict_match_regex_failed(self) -> None:
         @responses.activate
-        def run():
+        def run() -> None:
             self._register()
             session = requests.Session()
             # requests will add some extra headers of its own, so we have to use prepared requests
@@ -878,9 +883,9 @@ class TestHeaderWithRegex:
         run()
         assert_reset()
 
-    def test_request_matches_headers_regex_strict_match_mismatched_field(self):
+    def test_request_matches_headers_regex_strict_match_mismatched_field(self) -> None:
         @responses.activate
-        def run():
+        def run() -> None:
             self._register()
             # requests will add some extra headers of its own, so we have to use prepared requests
             session = requests.Session()
@@ -906,9 +911,9 @@ class TestHeaderWithRegex:
         run()
         assert_reset()
 
-    def test_request_matches_headers_regex_strict_match_mismatched_number(self):
+    def test_request_matches_headers_regex_strict_match_mismatched_number(self) -> None:
         @responses.activate
-        def run():
+        def run() -> None:
             self._register()
             # requests will add some extra headers of its own, so we have to use prepared requests
             session = requests.Session()
@@ -937,9 +942,9 @@ class TestHeaderWithRegex:
         run()
         assert_reset()
 
-    def test_request_matches_headers_regex_strict_match_positive(self):
-        @responses.activate
-        def run():
+    def test_request_matches_headers_regex_strict_match_positive(self) -> None:
+        @responses.activate()
+        def run() -> None:
             self._register()
             # requests will add some extra headers of its own, so we have to use prepared requests
             session = requests.Session()

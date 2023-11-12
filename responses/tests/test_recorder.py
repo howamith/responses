@@ -1,9 +1,16 @@
 from pathlib import Path
+from types import ModuleType
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Tuple
+from typing import cast
 
 import pytest
 import requests
 import tomli_w
 import yaml
+from pytest_httpserver import HTTPServer
 
 import responses
 from responses import _recorder
@@ -16,7 +23,7 @@ except ImportError:
     import tomllib as _toml  # type: ignore[no-redef]
 
 
-def get_data(host, port):
+def get_data(host: str, port: int) -> Dict[str, Any]:
     data = {
         "responses": [
             {
@@ -65,22 +72,22 @@ def get_data(host, port):
 
 
 class TestRecord:
-    def setup_method(self):
+    def setup_method(self) -> None:
         self.out_file = Path("response_record")
         if self.out_file.exists():
             self.out_file.unlink()  # pragma: no cover
 
         assert not self.out_file.exists()
 
-    def test_recorder(self, httpserver):
+    def test_recorder(self, httpserver: HTTPServer) -> None:
         url202, url400, url404, url500 = self.prepare_server(httpserver)
 
-        def another():
+        def another() -> None:
             requests.get(url500)
             requests.put(url202)
 
         @_recorder.record(file_path=self.out_file)
-        def run():
+        def run() -> None:
             requests.get(url404)
             requests.get(url400)
             another()
@@ -92,7 +99,7 @@ class TestRecord:
 
         assert data == get_data(httpserver.host, httpserver.port)
 
-    def test_recorder_toml(self, httpserver):
+    def test_recorder_toml(self, httpserver: HTTPServer) -> None:
         custom_recorder = _recorder.Recorder()
 
         def dump_to_file(file_path, registered):
@@ -103,12 +110,12 @@ class TestRecord:
 
         url202, url400, url404, url500 = self.prepare_server(httpserver)
 
-        def another():
+        def another() -> None:
             requests.get(url500)
             requests.put(url202)
 
         @custom_recorder.record(file_path=self.out_file)
-        def run():
+        def run() -> None:
             requests.get(url404)
             requests.get(url400)
             another()
@@ -120,7 +127,7 @@ class TestRecord:
 
         assert data == get_data(httpserver.host, httpserver.port)
 
-    def prepare_server(self, httpserver):
+    def prepare_server(self, httpserver: HTTPServer) -> Tuple[str, str, str, str]:
         httpserver.expect_request("/500").respond_with_data(
             "500 Internal Server Error", status=500, content_type="text/plain"
         )
@@ -141,17 +148,17 @@ class TestRecord:
 
 
 class TestReplay:
-    def setup_method(self):
+    def setup_method(self) -> None:
         self.out_file = Path("response_record")
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         if self.out_file.exists():
             self.out_file.unlink()
 
         assert not self.out_file.exists()
 
     @pytest.mark.parametrize("parser", (yaml, tomli_w))
-    def test_add_from_file(self, parser):
+    def test_add_from_file(self, parser: ModuleType) -> None:
         if parser == yaml:
             with open(self.out_file, "w") as file:
                 parser.dump(get_data("example.com", "8080"), file)
@@ -160,7 +167,7 @@ class TestReplay:
                 parser.dump(get_data("example.com", "8080"), file)
 
         @responses.activate
-        def run():
+        def run() -> None:
             responses.patch("http://httpbin.org")
             if parser == tomli_w:
 
@@ -169,30 +176,30 @@ class TestReplay:
                         data = _toml.load(file)
                     return data
 
-                responses.mock._parse_response_file = _parse_response_file
+                setattr(responses.mock, "_parse_response_file", _parse_response_file)
 
             responses._add_from_file(file_path=self.out_file)
             responses.post("http://httpbin.org/form")
 
-            assert responses.registered()[0].url == "http://httpbin.org/"
-            assert responses.registered()[1].url == "http://example.com:8080/404"
-            assert (
-                responses.registered()[2].url == "http://example.com:8080/status/wrong"
-            )
-            assert responses.registered()[3].url == "http://example.com:8080/500"
-            assert responses.registered()[4].url == "http://example.com:8080/202"
-            assert responses.registered()[5].url == "http://httpbin.org/form"
+            registered = cast(List[responses.Response], responses.registered())
 
-            assert responses.registered()[0].method == "PATCH"
-            assert responses.registered()[2].method == "GET"
-            assert responses.registered()[4].method == "PUT"
-            assert responses.registered()[5].method == "POST"
+            assert registered[0].url == "http://httpbin.org/"
+            assert registered[1].url == "http://example.com:8080/404"
+            assert registered[2].url == "http://example.com:8080/status/wrong"
+            assert registered[3].url == "http://example.com:8080/500"
+            assert registered[4].url == "http://example.com:8080/202"
+            assert registered[5].url == "http://httpbin.org/form"
 
-            assert responses.registered()[2].status == 400
-            assert responses.registered()[3].status == 500
+            assert registered[0].method == "PATCH"
+            assert registered[2].method == "GET"
+            assert registered[4].method == "PUT"
+            assert registered[5].method == "POST"
 
-            assert responses.registered()[3].body == "500 Internal Server Error"
+            assert registered[2].status == 400
+            assert registered[3].status == 500
 
-            assert responses.registered()[3].content_type == "text/plain"
+            assert registered[3].body == "500 Internal Server Error"
+
+            assert registered[3].content_type == "text/plain"
 
         run()

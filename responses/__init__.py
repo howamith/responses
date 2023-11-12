@@ -975,7 +975,7 @@ class RequestsMock:
         func: Optional["_F"] = None,
         *,
         registry: Optional[Type[Any]] = None,
-        assert_all_requests_are_fired: bool = False,
+        assert_all_requests_are_fired: Optional[bool] = False,
     ) -> Union[Callable[["_F"], "_F"], "_F"]:
         if func is not None:
             return get_wrapped(func, self)
